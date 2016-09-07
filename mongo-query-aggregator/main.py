@@ -1,14 +1,13 @@
 from threading import Timer
 from pymongo.errors import BulkWriteError
 from pymongo import MongoClient
+# imports not required by library
 import logging
 from settings import (
     init_logging,
     MONGO_DB_SETTINGS,
     BUFFER_TIME
 )
-logger = logging.getLogger('batcher')
-init_logging()
 
 
 class RepeatedTimer(object):
@@ -80,7 +79,7 @@ class BatchingWindow:
         self.logger = logger
 
     def __str__(self):
-        """The name of this :class:`Database`."""
+        """Interval for batchine:`seconds`."""
         return '<BatchingWindowInstance seconds: {}>'.format(self.interval)
 
     def conn(self):
@@ -128,6 +127,10 @@ class BatchingWindow:
     def restart(self):
         self.stop()
         self.start()
+
+
+logger = logging.getLogger('batcher')
+init_logging()
 
 if __name__ == '__main__':
     print('hello')
