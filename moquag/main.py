@@ -70,7 +70,7 @@ class Bulk:
                 self.logger.error(bwe.details)
 
 
-class BatchingWindow:
+class MongoQueryAggregator:
 
     def __init__(self, interval, mongodb_settings, logger):
         self.__conn = None
@@ -128,17 +128,3 @@ class BatchingWindow:
     def restart(self):
         self.stop()
         self.start()
-
-
-# logger = logging.getLogger('batcher')
-# init_logging()
-
-# if __name__ == '__main__':
-#     print('hello')
-#     logger.info('starting batcher')
-#     b = BatchingWindow(BUFFER_TIME, logger)
-#     b.ravi.teja.insert({'key': 1, 'value': 2})
-#     b.ravi.teja.find({'key': 1, 'value': 2}).update({'$set':{'key': 100, 'value': 200}})
-#     b.ravi.teja.insert({'key': 1, 'value': 2})
-#     b.ravi.teja.insert({'key': 1, 'value': 2})
-#     b.start()

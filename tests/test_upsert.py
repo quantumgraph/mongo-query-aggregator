@@ -1,6 +1,6 @@
 import unittest
 from pymongo import MongoClient
-from moquag.main import BatchingWindow
+from moquag import MongoQueryAggregator
 import logging
 from time import sleep
 logger = logging.getLogger()
@@ -14,7 +14,7 @@ class TestUpsertDoc(unittest.TestCase):
     def setUp(self):
         self.buff_time = 1
         self.conn = MongoClient(**MONGO_DB_SETTINGS)
-        self.b = BatchingWindow(self.buff_time, MONGO_DB_SETTINGS, logger)
+        self.b = MongoQueryAggregator(self.buff_time, MONGO_DB_SETTINGS, logger)
         self.b.start()
 
     def tearDown(self):

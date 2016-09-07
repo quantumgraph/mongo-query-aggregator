@@ -1,6 +1,6 @@
 import unittest
 from pymongo import MongoClient
-from moquag.main import BatchingWindow
+from moquag import MongoQueryAggregator
 import logging
 from time import sleep
 logger = logging.getLogger()
@@ -12,9 +12,9 @@ MONGO_DB_SETTINGS = {
 class TestDocInsert10ms(unittest.TestCase):
 
     def setUp(self):
-        self.buff_time = 1 / 100
+        self.buff_time = 0.01
         self.conn = MongoClient(**MONGO_DB_SETTINGS)
-        self.b = BatchingWindow(self.buff_time, MONGO_DB_SETTINGS, logger)
+        self.b = MongoQueryAggregator(self.buff_time, MONGO_DB_SETTINGS, logger)
         self.b.start()
 
     def tearDown(self):
@@ -36,9 +36,9 @@ class TestDocInsert10ms(unittest.TestCase):
 class TestDocInsert100ms(unittest.TestCase):
 
     def setUp(self):
-        self.buff_time = 1 / 10
+        self.buff_time = 0.1
         self.conn = MongoClient(**MONGO_DB_SETTINGS)
-        self.b = BatchingWindow(self.buff_time, MONGO_DB_SETTINGS, logger)
+        self.b = MongoQueryAggregator(self.buff_time, MONGO_DB_SETTINGS, logger)
         self.b.start()
 
     def tearDown(self):
@@ -62,7 +62,7 @@ class TestDocInsert5s(unittest.TestCase):
     def setUp(self):
         self.buff_time = 5
         self.conn = MongoClient(**MONGO_DB_SETTINGS)
-        self.b = BatchingWindow(self.buff_time, MONGO_DB_SETTINGS, logger)
+        self.b = MongoQueryAggregator(self.buff_time, MONGO_DB_SETTINGS, logger)
         self.b.start()
 
     def tearDown(self):
