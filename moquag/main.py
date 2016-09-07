@@ -1,13 +1,8 @@
 from threading import Timer
 from pymongo.errors import BulkWriteError
 from pymongo import MongoClient
+import json
 # imports not required by library
-import logging
-from settings import (
-    init_logging,
-    MONGO_DB_SETTINGS,
-    BUFFER_TIME
-)
 
 
 class RepeatedTimer(object):
@@ -47,6 +42,12 @@ class Bulk:
         self.db_name = db_name
         self.logger = logger
 
+    def __next__(self):
+        raise TypeError("'Bulk' object is not iterable")
+
+    def __iter__(self):
+        return self
+
     def __str__(self):
         """The name of this :class:`Database`."""
         return '<BulkOperatorInstanceForDatabase: {}>'.format(self.db_name)
@@ -60,23 +61,24 @@ class Bulk:
     def __getitem__(self, name):
         return self.__getattr__(name)
 
-    def execute(self, bulk_dict):
-        for db_name, bulk in self.__bulks():
+    def execute(self):
+        for db_name, bulk in self.__bulks.items():
             try:
                 result = bulk.execute()
-                logger.info(result)
+                self.logger.info(json.dumps(result))
             except BulkWriteError as bwe:
-                logger.error(bwe.details)
+                self.logger.error(bwe.details)
 
 
 class BatchingWindow:
 
-    def __init__(self, interval, logger):
+    def __init__(self, interval, mongodb_settings, logger):
         self.__conn = None
         self.__dbs = {}
         self.interval = interval
         self.looper = None
         self.logger = logger
+        self.mongodb_settings = mongodb_settings
 
     def __str__(self):
         """Interval for batchine:`seconds`."""
@@ -84,8 +86,8 @@ class BatchingWindow:
 
     def conn(self):
         if not self.__conn:
-            MONGO_DB_SETTINGS['connect'] = False
-            self.__conn = MongoClient(**MONGO_DB_SETTINGS)
+            self.mongodb_settings['connect'] = False
+            self.__conn = MongoClient(**self.mongodb_settings)
         return self.__conn
 
     def __getattr__(self, db_name):
@@ -97,11 +99,10 @@ class BatchingWindow:
         return self.__getattr__(name)
 
     def execute(self):
-        for db_name, bulks in self.__dbs:
-            ops = bulks
-            del self.bulks[db_name]
-            for bulk in ops:
-                bulk.execute()
+        for db_name, bulks in self.__dbs.items():
+            bulk_ops = bulks
+            del self.__dbs[db_name]
+            bulk_ops.execute()
 
     def start(self):
         if self.looper:
@@ -121,7 +122,7 @@ class BatchingWindow:
             self.looper.stop()
             self.looper = None
         else:
-            logger.info('Not started')
+            self.logger.info('Not started')
             self.looper = None
 
     def restart(self):
@@ -129,14 +130,15 @@ class BatchingWindow:
         self.start()
 
 
-logger = logging.getLogger('batcher')
-init_logging()
+# logger = logging.getLogger('batcher')
+# init_logging()
 
-if __name__ == '__main__':
-    print('hello')
-    logger.info('starting batcher')
-    b = BatchingWindow(BUFFER_TIME, logger)
-    print(b)
-    print(b.ravi)
-    b.start()
-    b.stop()
+# if __name__ == '__main__':
+#     print('hello')
+#     logger.info('starting batcher')
+#     b = BatchingWindow(BUFFER_TIME, logger)
+#     b.ravi.teja.insert({'key': 1, 'value': 2})
+#     b.ravi.teja.find({'key': 1, 'value': 2}).update({'$set':{'key': 100, 'value': 200}})
+#     b.ravi.teja.insert({'key': 1, 'value': 2})
+#     b.ravi.teja.insert({'key': 1, 'value': 2})
+#     b.start()

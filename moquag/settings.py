@@ -6,7 +6,7 @@ LOG_DIR = os.path.expanduser('~') + '/log/batching/'
 DEBUG = True
 if DEBUG:
     MONGO_DB_SETTINGS = {'host': 'localhost', 'port': 27000}
-    BUFFER_TIME = 10
+    BUFFER_TIME = 1
     LOG_DIR = 'log'
 else:
     MONGO_DB_SETTINGS = {'host': 'replset/replset-mongo'}
