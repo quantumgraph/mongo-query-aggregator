@@ -3,7 +3,6 @@ from pymongo.errors import BulkWriteError
 from pymongo.bulk import BulkOperationBuilder
 from pymongo import MongoClient
 import logging
-import json
 # imports not required by library
 
 
@@ -95,14 +94,19 @@ class BulkOperator(BulkOperationBuilder):
           - write_concern (optional): the write concern for this bulk
             execution.
         """
-        self.execute_count += 1
-        self.total_ops += 1
-        return super(BulkOperator, self).execute(*args)
+        if self.total_ops > 0:
+            return super(BulkOperator, self).execute(*args)
+        else:
+            return {'ops': 'No ops found'}
 
     def __str__(self):
         """The name of this :class:`Database`."""
         s = '<BulkOperator find: {}, insert: {}, execute:{}>'
         return s.format(self.find_count, self.insert_count, self.execute_count)
+
+    def __repr__(self):
+        """The name of this :class:`Database`."""
+        return self.__str__()
 
 
 class Bulk:
@@ -123,6 +127,10 @@ class Bulk:
     def __str__(self):
         """The name of this :class:`Database`."""
         return '<BulkOperatorInstanceForDatabase: {}>'.format(self.db_name)
+
+    def __repr__(self):
+        """Interval for batching:`seconds`."""
+        return self.__str__()
 
     def __getattr__(self, collection):
         if collection not in self.__bulks:
@@ -167,12 +175,16 @@ class MongoQueryAggregator:
         if logger:
             self.logger = logger
         else:
-            logger = logging.getLogger()
+            self.logger = logging.getLogger()
         self.mongodb_settings = mongodb_settings
 
     def __str__(self):
         """Interval for batching:`seconds`."""
         return '<BatchingWindowInstance seconds: {}>'.format(self.interval)
+
+    def __repr__(self):
+        """Interval for batching:`seconds`."""
+        return self.__str__()
 
     def __cnnction(self):
         if not self.__conn:
