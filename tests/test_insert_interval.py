@@ -1,12 +1,8 @@
 import unittest
 from pymongo import MongoClient
 from moquag import MongoQueryAggregator
-import logging
 from time import sleep
-logger = logging.getLogger()
-MONGO_DB_SETTINGS = {
-    'port': 27000
-}
+from settings import MONGO_DB_SETTINGS, logger
 
 
 class TestDocInsert10ms(unittest.TestCase):
