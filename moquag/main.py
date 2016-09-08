@@ -138,7 +138,10 @@ class Bulk:
         """
         for coll, bulk in self.__bulks.items():
             try:
-                self.logger.info(bulk)
+                self.logger.info('db: %s, coll: %s, ops: %s',
+                                 self.db_name,
+                                 coll,
+                                 bulk)
                 ops = bulk
                 del self.__bulks[coll]
                 result = ops.execute()
