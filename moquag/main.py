@@ -136,16 +136,16 @@ class Bulk:
     def execute(self):
         """Call this to flush the existing cached operations at db level
         """
-        for coll, bulk in self.__bulks.items():
+        for coll in list(self.__bulks):
             try:
                 self.logger.info('db: %s, coll: %s, ops: %s',
                                  self.db_name,
                                  coll,
-                                 bulk)
-                ops = bulk
+                                 self.__bulks[coll])
+                ops = self.__bulks[coll]
                 del self.__bulks[coll]
                 result = ops.execute()
-                self.logger.info(json.dumps(result))
+                self.logger.info(result)
             except BulkWriteError as bwe:
                 self.logger.error(bwe.details)
 

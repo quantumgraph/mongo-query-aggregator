@@ -1,1 +1,1 @@
-from main import MongoQueryAggregator
+from .main import MongoQueryAggregator

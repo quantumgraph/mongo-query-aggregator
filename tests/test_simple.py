@@ -2,7 +2,7 @@ import unittest
 from pymongo import MongoClient
 from moquag import MongoQueryAggregator
 from time import sleep
-from settings import MONGO_DB_SETTINGS, logger
+from .settings import MONGO_DB_SETTINGS, logger
 
 
 class TestUpsertDoc(unittest.TestCase):
