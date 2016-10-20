@@ -3,6 +3,7 @@ from pymongo.errors import BulkWriteError
 from pymongo.bulk import BulkOperationBuilder
 from pymongo import MongoClient
 import logging
+moquag_logger = logging.getLogger('moquag')
 # imports not required by library
 
 
@@ -14,14 +15,19 @@ class RepeatedTimer(object):
         self.function = function
         self.args = args
         self.kwargs = kwargs
-        self.logger = logger
+        self.logger = logger or moquag_logger
         self.is_running = False
         self.start()
+        self.count = 0
 
     def _run(self):
+        self.count += 1
         self.is_running = False
         self.start()
-        self.logger.debug('running thread')
+        if self.count % 120 == 0:
+            self.logger.debug('RunningThread loop: %s', self.count)
+            if self.count > 32768:
+                self.count = 0
         self.function(*self.args, **self.kwargs)
 
     def start(self):
@@ -37,7 +43,7 @@ class RepeatedTimer(object):
 
 class BulkOperator(BulkOperationBuilder):
 
-    def __init__(self, collection, ordered=True,
+    def __init__(self, collection, ordered=False,
                  bypass_document_validation=False):
         """Initialize a new BulkOperator which extends BulkOperationBuilder.
         :Parameters:
@@ -101,7 +107,7 @@ class BulkOperator(BulkOperationBuilder):
 
     def __str__(self):
         """The name of this :class:`Database`."""
-        s = '<BulkOperator find: {}, insert: {}, execute:{}>'
+        s = '"BOFind": {}, "BOInsert": {}, "BOExecute":{}'
         return s.format(self.find_count, self.insert_count, self.execute_count)
 
     def __repr__(self):
@@ -126,7 +132,7 @@ class Bulk:
 
     def __str__(self):
         """The name of this :class:`Database`."""
-        return '<BulkOperatorInstanceForDatabase: {}>'.format(self.db_name)
+        return '{"BulkOperatorInstanceForDatabase": "{}"'.format(self.db_name)
 
     def __repr__(self):
         """Interval for batching:`seconds`."""
@@ -170,17 +176,15 @@ class MongoQueryAggregator:
         """
         self.__conn = None
         self.__dbs = {}
-        self.interval = interval
+        self.__interval = interval
         self.looper = None
-        if logger:
-            self.logger = logger
-        else:
-            self.logger = logging.getLogger()
+        self.is_executing = False
+        self.logger = logger or moquag_logger
         self.mongodb_settings = mongodb_settings
 
     def __str__(self):
         """Interval for batching:`seconds`."""
-        return '<BatchingWindowInstance seconds: {}>'.format(self.interval)
+        return '{"seconds": {}}'.format(self.__interval)
 
     def __repr__(self):
         """Interval for batching:`seconds`."""
@@ -203,6 +207,11 @@ class MongoQueryAggregator:
     def execute(self):
         """Call this to flush the existing cached operations
         """
+        if self.is_executing:
+            self.logger.info(
+                'Execution is already in progress by different thread'
+            )
+            return
         for db_name, bulk_ops in self.__dbs.items():
             bulk_ops.execute()
 
@@ -213,14 +222,14 @@ class MongoQueryAggregator:
         """
         if self.looper:
             self.logger.info('Already started')
-            self.logger.info('looping every %s seconds', self.interval)
+            self.logger.info('looping every %s seconds', self.__interval)
         else:
             self.looper = RepeatedTimer(self.logger,
-                                        self.interval,
+                                        self.__interval,
                                         self.execute)
             self.looper.start()
             self.logger.info('########Starting Loop########')
-            self.logger.info('looping every %s seconds', self.interval)
+            self.logger.info('looping every %s seconds', self.__interval)
 
     def stop(self):
         """Flush existing data and stop periodic flushing thread
