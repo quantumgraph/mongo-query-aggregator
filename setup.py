@@ -4,7 +4,7 @@ setup(
     # This is the name of your PyPI-package.
     name='moquag',
     # Update the version number for new releases
-    version='0.21',
+    version='0.22',
     # The name of your scipt, and also the command you'll be using for
     # calling it
     # scripts=['moquag'],
@@ -19,3 +19,6 @@ setup(
     ],
     zip_safe=False
 )
+
+# uploading command for package
+# python setup.py sdist upload
