@@ -24,7 +24,7 @@ class RepeatedTimer(object):
         self.count += 1
         self.is_running = False
         self.start()
-        if self.count % 2 == 0:
+        if self.count % 120 == 0:
             self.logger.debug('RunningThread loop: %s', self.count)
             if self.count > 32768:
                 self.count = 0
