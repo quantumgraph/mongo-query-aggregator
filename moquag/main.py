@@ -63,6 +63,7 @@ class BulkOperator(BulkOperationBuilder):
           Added bypass_document_validation support
         """
         super(BulkOperator, self).__init__(collection, ordered)
+        self.executed = False
         self.find_count = 0
         self.insert_count = 0
         self.execute_count = 0
@@ -101,6 +102,7 @@ class BulkOperator(BulkOperationBuilder):
             execution.
         """
         if self.total_ops > 0:
+            self.executed = True
             return super(BulkOperator, self).execute(*args)
         else:
             return {'ops': 'No ops found'}
@@ -142,6 +144,10 @@ class Bulk:
         if collection not in self.__bulks:
             coll = self.__conn[self.db_name][collection]
             self.__bulks[collection] = BulkOperator(coll, self.ordered)
+        elif self.__bulks[collection].executed:
+            del self.__bulks[collection]
+            coll = self.__conn[self.db_name][collection]
+            self.__bulks[collection] = BulkOperator(coll, self.ordered)
         return self.__bulks[collection]
 
     def __getitem__(self, name):
@@ -152,14 +158,15 @@ class Bulk:
         """
         for coll in list(self.__bulks):
             try:
-                self.logger.info('db: %s, coll: %s, ops: %s',
-                                 self.db_name,
-                                 coll,
-                                 self.__bulks[coll])
-                ops = self.__bulks[coll]
-                del self.__bulks[coll]
-                result = ops.execute()
-                self.logger.info(result)
+                self.logger.debug('db: %s, coll: %s, ops: %s',
+                                  self.db_name,
+                                  coll,
+                                  self.__bulks[coll])
+                bulkOp = self.__bulks[coll]
+                if bulkOp.executed:
+                    continue
+                result = bulkOp.execute()
+                self.logger.debug(result)
             except BulkWriteError as bwe:
                 self.logger.error(bwe.details)
 
@@ -212,8 +219,10 @@ class MongoQueryAggregator:
                 'Execution is already in progress by different thread'
             )
             return
+        self.is_executing = True
         for db_name, bulk_ops in self.__dbs.items():
             bulk_ops.execute()
+        self.is_executing = False
 
     def start(self):
         """starts a background thread to flush data to mongodb periodically as
