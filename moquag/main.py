@@ -1,12 +1,9 @@
-from threading import Timer
 from pymongo.errors import BulkWriteError
 from pymongo.bulk import BulkOperationBuilder
 from pymongo import MongoClient
 from collections import Counter
-import logging
 from time import time
-moquag_logger = logging.getLogger('moquag')
-# imports not required by library
+import sys
 
 class BulkOperator(BulkOperationBuilder):
 
@@ -71,7 +68,7 @@ class BulkOperator(BulkOperationBuilder):
                 if key in ['writeConcernErrors', 'writeErrors']:
                     if len(ret[key]) > 0:
                         result_counter[key] = len(ret[key])
-                        print key, ':\n\t', ret[key]
+                        sys.stderr.write('{}:\n\t{}'.format(key, ret[key]))
                 elif key != 'upserted':
                     result_counter[key] = ret[key]
             return Counter(result_counter)
@@ -135,7 +132,7 @@ class Bulk:
                 results_key = (self.db_name, coll)
                 self.results[results_key] += Counter(bulkOp.execute())
             except BulkWriteError as bwe:
-                print bwe.details
+                sys.stderr.write(bwe.details)
 
 
 class MongoQueryAggregator:
