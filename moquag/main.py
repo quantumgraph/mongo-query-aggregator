@@ -130,6 +130,7 @@ class Bulk:
             try:
                 bulkOp = self.__bulks[coll]
                 results_key = (self.db_name, coll)
+                self.results.setdefault(results_key, Counter())
                 self.results[results_key] += Counter(bulkOp.execute())
             except BulkWriteError as bwe:
                 sys.stderr.write(bwe.details)
@@ -192,3 +193,11 @@ class MongoQueryAggregator:
 
     def get_results(self):
         return self.results
+
+    def get_and_reset_results(self):
+        '''this function returns current results and resets results'''
+        results = self.results
+        self.results = {}
+        for db_name, bulkOp in self.__dbs.iteritems():
+            bulkOp.results = self.results
+        return results
