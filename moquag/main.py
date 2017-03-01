@@ -106,15 +106,18 @@ class Bulk:
         """Interval for batching:`seconds`."""
         return self.__str__()
 
-    def __getattr__(self, collection):
+    def update_results(self, collection, curr_result):
         results_key = (self.db_name, collection)
-        if results_key not in self.results:
-            self.results[results_key] = Counter()
+        self.results.setdefault(results_key, Counter())
+        self.results[results_key] += curr_result
+
+    def __getattr__(self, collection):
         if collection not in self.__bulks:
             coll = self.__conn[self.db_name][collection]
             self.__bulks[collection] = BulkOperator(coll, self.ordered)
         elif self.__bulks[collection].total_ops >= self.max_ops_limit:
-            self.results[results_key] += Counter(self.__bulks[collection].execute())
+            curr_result = Counter(self.__bulks[collection].execute())
+            self.update_results(collection, curr_result)
             coll = self.__conn[self.db_name][collection]
             self.__bulks[collection] = BulkOperator(coll, self.ordered)
 
@@ -129,9 +132,8 @@ class Bulk:
         for coll in list(self.__bulks):
             try:
                 bulkOp = self.__bulks[coll]
-                results_key = (self.db_name, coll)
-                self.results.setdefault(results_key, Counter())
-                self.results[results_key] += Counter(bulkOp.execute())
+                curr_result = Counter(bulkOp.execute())
+                self.update_results(coll, curr_result)
             except BulkWriteError as bwe:
                 sys.stderr.write(bwe.details)
 

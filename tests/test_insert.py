@@ -87,8 +87,7 @@ class TestBulk(unittest.TestCase):
 
         self.assertListEqual(docs_in_db, docs[:5])
         aggregators_expected_results = {
-            ('testdb1', 'profiles'): Counter({'nInserted': 5}),
-            ('testdb2', 'profiles'): Counter()
+            ('testdb1', 'profiles'): Counter({'nInserted': 5})
         }
         aggregators_results = mongo_agg.get_results()
         self.assertEqual(aggregators_expected_results,aggregators_results)
