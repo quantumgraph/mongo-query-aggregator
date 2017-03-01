@@ -1,45 +1,9 @@
-from threading import Timer
 from pymongo.errors import BulkWriteError
 from pymongo.bulk import BulkOperationBuilder
 from pymongo import MongoClient
-import logging
-moquag_logger = logging.getLogger('moquag')
-# imports not required by library
-
-
-class RepeatedTimer(object):
-
-    def __init__(self, logger, interval, function, *args, **kwargs):
-        self._timer = None
-        self.interval = interval
-        self.function = function
-        self.args = args
-        self.kwargs = kwargs
-        self.logger = logger or moquag_logger
-        self.is_running = False
-        self.start()
-        self.count = 0
-
-    def _run(self):
-        self.count += 1
-        self.is_running = False
-        self.start()
-        if self.count % 120 == 0:
-            self.logger.debug('RunningThread loop: %s', self.count)
-            if self.count > 32768:
-                self.count = 0
-        self.function(*self.args, **self.kwargs)
-
-    def start(self):
-        if not self.is_running:
-            self._timer = Timer(self.interval, self._run)
-            self._timer.start()
-            self.is_running = True
-
-    def stop(self):
-        self._timer.cancel()
-        self.is_running = False
-
+from collections import Counter
+from time import time
+import sys
 
 class BulkOperator(BulkOperationBuilder):
 
@@ -63,14 +27,10 @@ class BulkOperator(BulkOperationBuilder):
           Added bypass_document_validation support
         """
         super(BulkOperator, self).__init__(collection, ordered)
-        self.executed = False
         self.find_count = 0
         self.insert_count = 0
         self.execute_count = 0
         self.total_ops = 0
-
-    def total_ops(self):
-        return self.find_count + self.insert_count + self.execute_count
 
     def find(self, *args):
         """Specify selection criteria for bulk operations.
@@ -102,8 +62,16 @@ class BulkOperator(BulkOperationBuilder):
             execution.
         """
         if self.total_ops > 0:
-            self.executed = True
-            return super(BulkOperator, self).execute(*args)
+            ret = super(BulkOperator, self).execute(*args)
+            result_counter = {}
+            for key in ret:
+                if key in ['writeConcernErrors', 'writeErrors']:
+                    if len(ret[key]) > 0:
+                        result_counter[key] = len(ret[key])
+                        sys.stderr.write('{}:\n\t{}'.format(key, ret[key]))
+                elif key != 'upserted':
+                    result_counter[key] = ret[key]
+            return Counter(result_counter)
         else:
             return {'ops': 'No ops found'}
 
@@ -119,18 +87,16 @@ class BulkOperator(BulkOperationBuilder):
 
 class Bulk:
 
-    def __init__(self, db_name, conn, logger, ordered=True):
+    def __init__(self, conn, db_name, results, max_ops_limit, ordered=True):
         self.__conn = conn
         self.__bulks = {}
         self.db_name = db_name
-        self.logger = logger
         self.ordered = ordered
+        self.max_ops_limit = max_ops_limit
+        self.results = results
 
     def __next__(self):
         raise TypeError("'Bulk' object is not iterable")
-
-    def __iter__(self):
-        return self
 
     def __str__(self):
         """The name of this :class:`Database`."""
@@ -140,14 +106,21 @@ class Bulk:
         """Interval for batching:`seconds`."""
         return self.__str__()
 
+    def update_results(self, collection, curr_result):
+        results_key = (self.db_name, collection)
+        self.results.setdefault(results_key, Counter())
+        self.results[results_key] += curr_result
+
     def __getattr__(self, collection):
         if collection not in self.__bulks:
             coll = self.__conn[self.db_name][collection]
             self.__bulks[collection] = BulkOperator(coll, self.ordered)
-        elif self.__bulks[collection].executed:
-            del self.__bulks[collection]
+        elif self.__bulks[collection].total_ops >= self.max_ops_limit:
+            curr_result = Counter(self.__bulks[collection].execute())
+            self.update_results(collection, curr_result)
             coll = self.__conn[self.db_name][collection]
             self.__bulks[collection] = BulkOperator(coll, self.ordered)
+
         return self.__bulks[collection]
 
     def __getitem__(self, name):
@@ -158,36 +131,30 @@ class Bulk:
         """
         for coll in list(self.__bulks):
             try:
-                self.logger.debug('db: %s, coll: %s, ops: %s',
-                                  self.db_name,
-                                  coll,
-                                  self.__bulks[coll])
                 bulkOp = self.__bulks[coll]
-                if bulkOp.executed:
-                    continue
-                result = bulkOp.execute()
-                self.logger.debug(result)
+                curr_result = Counter(bulkOp.execute())
+                self.update_results(coll, curr_result)
             except BulkWriteError as bwe:
-                self.logger.error(bwe.details)
+                sys.stderr.write(bwe.details)
 
 
 class MongoQueryAggregator:
 
-    def __init__(self, interval, mongodb_settings, logger=None):
+    def __init__(self, mongodb_settings, interval, max_ops_limit):
         """Initialize a new MongoQueryAggregator.
         :Parameters:
           - `interval`: A :Integer:`seconds`.
           - `mongodb_settings` :dict: mongdb Settings.
-          - `logger`:(optional) A :class: that is provided by logger settings
-          Added bypass_document_validation support
+          - `max_ops_limit`: A :Integer: max number of operation a Bulk can hold for a collection
+            crossing this limit it will execute already cached operations
         """
         self.__conn = None
         self.__dbs = {}
         self.__interval = interval
-        self.looper = None
-        self.is_executing = False
-        self.logger = logger or moquag_logger
         self.mongodb_settings = mongodb_settings
+        self.max_ops_limit = max_ops_limit
+        self.last_execution_time = time()
+        self.results = {}
 
     def __str__(self):
         """Interval for batching:`seconds`."""
@@ -197,15 +164,18 @@ class MongoQueryAggregator:
         """Interval for batching:`seconds`."""
         return self.__str__()
 
-    def __cnnction(self):
+    def __connection(self):
         if not self.__conn:
             self.mongodb_settings['connect'] = False
             self.__conn = MongoClient(**self.mongodb_settings)
         return self.__conn
 
     def __getattr__(self, db_name):
+        if self.__interval + self.last_execution_time <= time():
+            self.execute()
+
         if db_name not in self.__dbs:
-            self.__dbs[db_name] = Bulk(db_name, self.__cnnction(), self.logger)
+            self.__dbs[db_name] = Bulk(self.__connection(), db_name, self.results, self.max_ops_limit)
         return self.__dbs[db_name]
 
     def __getitem__(self, name):
@@ -214,45 +184,22 @@ class MongoQueryAggregator:
     def execute(self):
         """Call this to flush the existing cached operations
         """
-        if self.is_executing:
-            self.logger.info(
-                'Execution is already in progress by different thread'
-            )
-            return
-        self.is_executing = True
-        for db_name, bulk_ops in self.__dbs.items():
-            bulk_ops.execute()
-        self.is_executing = False
+        for db_name in list(self.__dbs):
+            self.__dbs[db_name].execute()
+        self.__dbs = {}
+        self.last_execution_time = time()
 
-    def start(self):
-        """starts a background thread to flush data to mongodb periodically as
-        specified by buffer time.
-        will not start a new thread if it is already running
-        """
-        if self.looper:
-            self.logger.info('Already started')
-            self.logger.info('looping every %s seconds', self.__interval)
-        else:
-            self.looper = RepeatedTimer(self.logger,
-                                        self.__interval,
-                                        self.execute)
-            self.looper.start()
-            self.logger.info('########Starting Loop########')
-            self.logger.info('looping every %s seconds', self.__interval)
+    def __del__(self):
+        '''execute all pending queries on deleting instance of MongoQueryAggregator'''
+        self.execute()
 
-    def stop(self):
-        """Flush existing data and stop periodic flushing thread
-        """
-        if self.looper:
-            self.logger.info('########Stopping Loop########')
-            self.looper.stop()
-            self.looper = None
-        else:
-            self.logger.info('Not started')
-            self.looper = None
+    def get_results(self):
+        return self.results
 
-    def restart(self):
-        """Flush data if required and restart periodic flushing data
-        """
-        self.stop()
-        self.start()
+    def get_and_reset_results(self):
+        '''this function returns current results and resets results'''
+        results = self.results
+        self.results = {}
+        for db_name, bulkOp in self.__dbs.iteritems():
+            bulkOp.results = self.results
+        return results
