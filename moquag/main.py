@@ -1,5 +1,6 @@
 from pymongo.errors import BulkWriteError
 from pymongo.bulk import BulkOperationBuilder
+import traceback
 from pymongo import MongoClient
 from collections import Counter
 from time import time
@@ -135,7 +136,7 @@ class Bulk:
                 curr_result = Counter(bulkOp.execute())
                 self.update_results(coll, curr_result)
             except BulkWriteError as bwe:
-                sys.stderr.write(bwe.details)
+                sys.stderr.write(str(bwe.details))
 
 
 class MongoQueryAggregator:
@@ -185,7 +186,13 @@ class MongoQueryAggregator:
         """Call this to flush the existing cached operations
         """
         for db_name in list(self.__dbs):
-            self.__dbs[db_name].execute()
+            try:
+                self.__dbs[db_name].execute()
+            except Exception as e:
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                traceback_log = ''.join(line for line in lines)
+                sys.stderr.write('For DB [ {} ]\n\t'.format(db_name, traceback_log))
         self.__dbs = {}
         self.last_execution_time = time()
 
