@@ -4,7 +4,7 @@ setup(
     # This is the name of your PyPI-package.
     name='moquag',
     # Update the version number for new releases
-    version='0.243',
+    version='0.244',
     # The name of your scipt, and also the command you'll be using for
     # calling it
     # scripts=['moquag'],
