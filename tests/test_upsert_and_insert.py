@@ -146,3 +146,67 @@ class TestBulk(unittest.TestCase):
             ('testdb2', 'events'): Counter({'nUpserted': 1, 'nInserted': 1})
         }
         self.assertEqual(mongo_agg.get_results(), aggregators_expected_results)
+
+    def test_4(self):
+        '''testing get_buffered_query_count
+        '''
+        mongo_agg = MongoQueryAggregator(MONGO_DB_SETTINGS, 1, 50)
+        dbs_to_data_to_insert = {
+            ('testdb1', 'profiles'): [ {'id': 1}, {'id': 2} ],
+            ('testdb2', 'events'): [ {'id': 3} ],
+            ('testdb3', 'users_details'): [ {'id': 5}, {'id': 6}, {'id': 8} ]
+        }
+        db_to_data_to_update = {
+            ('testdb1', 'profiles'): [ ({'id': 1}, {'name': 'new1'}) ],
+            ('testdb2', 'events'): [ ({'id': 100}, {'name': 'new100'}) ],
+            ('testdb3', 'users_details'): [
+                ({'id': 5}, {'name': 'new5'}),
+                ({'id': 6}, {'name': 'new6'})
+            ]
+        }
+        for (db_name, collection_name), docs in dbs_to_data_to_insert.iteritems():
+            for doc in docs:
+                mongo_agg[db_name][collection_name].insert(doc)
+
+        for (db_name, collection_name), data in db_to_data_to_update.iteritems():
+            for search_query, update_query in data:
+                mongo_agg[db_name][collection_name].find(search_query).upsert().update({'$set': update_query})
+        expected_query_count = {
+            ('events', 'testdb2'): {'insert': 1, 'find': 1},
+            ('profiles', 'testdb1'): {'insert': 2, 'find': 1},
+            ('users_details', 'testdb3'): {'insert': 3, 'find': 2}
+        }
+        query_count = mongo_agg.get_buffered_query_count()
+        self.assertEqual(expected_query_count, query_count)
+
+    def test_5(self):
+        '''testing get_buffered_query_count
+        '''
+        mongo_agg = MongoQueryAggregator(MONGO_DB_SETTINGS, 1, 50)
+        dbs_to_data_to_insert = {
+            ('testdb1', 'profiles'): [ {'id': 1}, {'id': 2} ],
+            ('testdb1', 'events'): [ {'id': 3} ],
+            ('testdb3', 'users_details'): [ {'id': 5}, {'id': 6}, {'id': 8} ]
+        }
+        db_to_data_to_update = {
+            ('testdb1', 'profiles'): [ ({'id': 1}, {'name': 'new1'}) ],
+            ('testdb1', 'events'): [ ({'id': 100}, {'name': 'new100'}) ],
+            ('testdb3', 'users_details'): [
+                ({'id': 5}, {'name': 'new5'}),
+                ({'id': 6}, {'name': 'new6'})
+            ]
+        }
+        for (db_name, collection_name), docs in dbs_to_data_to_insert.iteritems():
+            for doc in docs:
+                mongo_agg[db_name][collection_name].insert(doc)
+
+        for (db_name, collection_name), data in db_to_data_to_update.iteritems():
+            for search_query, update_query in data:
+                mongo_agg[db_name][collection_name].find(search_query).upsert().update({'$set': update_query})
+        expected_query_count = {
+            ('events', 'testdb1'): {'insert': 1, 'find': 1},
+            ('profiles', 'testdb1'): {'insert': 2, 'find': 1},
+            ('users_details', 'testdb3'): {'insert': 3, 'find': 2}
+        }
+        query_count = mongo_agg.get_buffered_query_count()
+        self.assertEqual(expected_query_count, query_count)
