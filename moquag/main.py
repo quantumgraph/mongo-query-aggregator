@@ -85,6 +85,15 @@ class BulkOperator(BulkOperationBuilder):
         """The name of this :class:`Database`."""
         return self.__str__()
 
+    def get_buffered_query_count(self):
+        """
+        returns count of queries buffered in BulkOperator
+        """
+        buffered_count_dict = {
+            'find': self.find_count,
+            'insert': self.insert_count
+        }
+        return buffered_count_dict
 
 class Bulk:
 
@@ -138,6 +147,16 @@ class Bulk:
             except BulkWriteError as bwe:
                 sys.stderr.write(str(bwe.details))
 
+    def get_buffered_query_count(self):
+        """
+        returns dict with key as coll, db_name and value as dict in format of
+        {'insert': count, 'find': count}
+        """
+        buffered_query_count = {}
+        for collection in self.__bulks:
+            query_count_dict = self.__bulks[collection].get_buffered_query_count()
+            buffered_query_count[(collection, self.db_name)] = query_count_dict
+        return buffered_query_count
 
 class MongoQueryAggregator:
 
@@ -192,21 +211,33 @@ class MongoQueryAggregator:
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
                 traceback_log = ''.join(line for line in lines)
-                sys.stderr.write('For DB [ {} ]\n\t'.format(db_name, traceback_log))
+                sys.stderr.write('For DB [ {} ]\n\tError:\n {}'.format(db_name, traceback_log))
         self.__dbs = {}
         self.last_execution_time = time()
 
     def __del__(self):
-        '''execute all pending queries on deleting instance of MongoQueryAggregator'''
+        """execute all pending queries on deleting instance of MongoQueryAggregator"""
         self.execute()
 
     def get_results(self):
         return self.results
 
     def get_and_reset_results(self):
-        '''this function returns current results and resets results'''
+        """this function returns current results and resets results"""
         results = self.results
         self.results = {}
         for db_name, bulkOp in self.__dbs.iteritems():
             bulkOp.results = self.results
         return results
+
+    def get_buffered_query_count(self):
+        """
+        this function will return count of all queries for each database, collection
+        it will return dict with key as (collection, db_name)
+        and value will be dict having keys insert and find with value as there count
+        """
+        buffered_query_count = {}
+        for db_name in list(self.__dbs):
+            query_count = self.__dbs[db_name].get_buffered_query_count()
+            buffered_query_count.update(query_count)
+        return buffered_query_count
