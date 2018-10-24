@@ -1,5 +1,7 @@
 # mongo-query-aggregator
 
+This library helps in aggregating insert, upsert and update calls across databases
+
 ### Testing
 To run tests:
 ```sh
